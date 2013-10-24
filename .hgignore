@@ -1,0 +1,9 @@
+syntax: regexp
+^\.gradle$
+^\.idea$
+^build$
+^out$
+^target$
+
+syntax: glob
+*.orig
