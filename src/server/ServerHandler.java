@@ -30,85 +30,86 @@ public class ServerHandler implements HttpHandler, MainServerChecker.MainServerH
     public void handle(HttpExchange httpExchange) {
         addRequest(httpExchange);
         if (mainServerChecker.test()) {
-            safeSendRequests();
+            sendRequests();
         } else {
             mainServerChecker.startLazy();
         }
     }
 
-    public synchronized void sendRequests() throws IOException {
+    public synchronized void sendRequests() {
         for (int i = 0; i < requests.size(); i++) {
             Request request = requests.get(i);
             if (!request.processed) {
-                System.out.print("Proxying request #" + i + " " + request.path + " ... ");
-                HttpExchange http = request.httpExchange;
-                URL url = new URL("http", config.serverHost, config.serverPort, request.path);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod(request.method);
-                conn.setDoInput(true);
+                try {
+                    System.out.print("Proxying request #" + i + " " + request.path + " ... ");
+                    HttpExchange http = request.httpExchange;
+                    URL url = new URL("http", config.serverHost, config.serverPort, request.path);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod(request.method);
+                    conn.setDoInput(true);
+                    conn.setConnectTimeout(config.proxyConnectionTimeoutMillis);
+                    conn.setReadTimeout(config.proxyReadTimeoutMillis);
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setDefaultUseCaches(false);
+                    conn.setUseCaches(false);
 
-                // Copy request headers
-                for (Map.Entry<String, List<String>> entry : request.headers) {
-                    for (String value : entry.getValue()) {
-                        conn.addRequestProperty(entry.getKey(), value);
-                    }
-                }
-
-                // Copy request body
-                if (request.hasBody()) {
-                    conn.setDoOutput(true);
-                    OutputStream connOutput = conn.getOutputStream();
-                    connOutput.write(request.body);
-                    connOutput.close();
-                }
-
-                // Copy response headers
-                Headers httpHeaders = http.getResponseHeaders();
-                long contentLength = 0;
-                for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
-                    String key = entry.getKey();
-                    if (key != null) {
-                        httpHeaders.put(key, entry.getValue());
-                        if (key.equalsIgnoreCase("Content-Length")) {
-                            contentLength = Long.parseLong(entry.getValue().get(0));
+                    // Copy request headers
+                    for (Map.Entry<String, List<String>> entry : request.headers) {
+                        for (String value : entry.getValue()) {
+                            conn.addRequestProperty(entry.getKey(), value);
                         }
                     }
-                }
-                int responseCode = conn.getResponseCode();
-                http.sendResponseHeaders(responseCode, contentLength);
 
-                // Copy response body
-                InputStream connInput = (responseCode >= 400 && responseCode < 600) ? conn.getErrorStream() : conn.getInputStream();
-                OutputStream responseBody = http.getResponseBody();
-                try {
-                    IOUtils.copy(connInput, responseBody);
-                    responseBody.close();
-                    System.out.println(responseCode + " content-length:" + contentLength);
+                    // Copy request body
+                    if (request.hasBody()) {
+                        conn.setDoOutput(true);
+                        OutputStream connOutput = conn.getOutputStream();
+                        connOutput.write(request.body);
+                        connOutput.close();
+                    }
+
+                    // Copy response headers
+                    Headers httpHeaders = http.getResponseHeaders();
+                    long contentLength = 0;
+                    for (Map.Entry<String, List<String>> entry : conn.getHeaderFields().entrySet()) {
+                        String key = entry.getKey();
+                        if (key != null) {
+                            httpHeaders.put(key, entry.getValue());
+                            if (key.equalsIgnoreCase("Content-Length")) {
+                                contentLength = Long.parseLong(entry.getValue().get(0));
+                            }
+                        }
+                    }
+                    int responseCode = conn.getResponseCode();
+                    http.sendResponseHeaders(responseCode, contentLength);
+
+                    // Copy response body
+                    InputStream connInput = (responseCode >= 400 && responseCode < 600) ? conn.getErrorStream() : conn.getInputStream();
+                    OutputStream responseBody = http.getResponseBody();
+                    try {
+                        IOUtils.copy(connInput, responseBody);
+                        responseBody.close();
+                        System.out.println(responseCode + " content-length:" + contentLength);
+                    } catch (IOException e) {
+                        // Тут возникает ошибки Broken Pipe - значит клиент закрыл соединение
+                        System.out.println("broken pipe, ignoring");
+                    }
+                    connInput.close();
+
+                    conn.disconnect();
+                    http.close();
                 } catch (IOException e) {
-                    // Тут возникает ошибки Broken Pipe - значит клиент закрыл соединение
-                    System.out.println("broken pipe, ignoring");
+                    e.printStackTrace();
                 }
-                connInput.close();
-
-                conn.disconnect();
-                http.close();
                 request.processed = true;
             }
         }
         cleanRequests();
     }
 
-    public void safeSendRequests() {
-        try {
-            sendRequests();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     @Override
     public void onMainServerUp() {
-        safeSendRequests();
+        sendRequests();
     }
 
     public void stop() {
@@ -116,7 +117,7 @@ public class ServerHandler implements HttpHandler, MainServerChecker.MainServerH
         if (!requests.isEmpty()) {
             for (int i = 0; i < config.maxRetriesBeforeStop; i++) {
                 if (mainServerChecker.test()) {
-                    safeSendRequests();
+                    sendRequests();
                 }
                 if (requests.isEmpty()) {
                     break;

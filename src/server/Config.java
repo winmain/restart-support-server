@@ -17,6 +17,9 @@ public class Config {
      */
     public int maxRetriesBeforeStop = 5;
 
+    public int proxyConnectionTimeoutMillis = 3000;
+    public int proxyReadTimeoutMillis = 60000;
+
 
     public Config(String[] args) {
         for (String arg : args) {
