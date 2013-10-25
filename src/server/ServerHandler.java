@@ -134,7 +134,9 @@ public class ServerHandler implements HttpHandler, MainServerChecker.MainServerH
 
     private void addRequest(HttpExchange httpExchange) {
         synchronized (requestsSync) {
-            requests.add(new Request(httpExchange));
+            Request request = new Request(httpExchange);
+            requests.add(request);
+            System.out.println("New request #" + (requests.size() - 1) + " " + request.path);
         }
     }
 

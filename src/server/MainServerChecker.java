@@ -2,6 +2,7 @@ package server;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Date;
 
 public class MainServerChecker {
 
@@ -42,13 +43,13 @@ public class MainServerChecker {
             Socket socket = new Socket(config.serverHost, config.serverPort);
             socket.close();
             if (!lastServerStatus) {
-                System.out.println("+++ Main server is online");
+                System.out.println("+++ " + new Date() + " Main server is online");
                 lastServerStatus = true;
             }
             return true;
         } catch (IOException e) {
             if (lastServerStatus) {
-                System.out.println("--- Main server goes offline");
+                System.out.println("--- " + new Date() + " Main server goes offline");
                 lastServerStatus = false;
             }
             return false;
