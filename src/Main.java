@@ -1,9 +1,10 @@
+import java.io.IOException;
+import java.net.InetSocketAddress;
+
 import com.sun.net.httpserver.HttpServer;
 import server.Config;
 import server.ServerHandler;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
+import server.util.SdDaemon;
 
 public class Main {
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -24,6 +25,7 @@ public class Main {
             }
         });
 
+        SdDaemon.ready();
         System.out.println("Listening " + config.listenHost + ":" + config.listenPort + " for proxy to " + config.serverHost + ":" + config.serverPort);
 
         while (true) {
